@@ -1,0 +1,5 @@
+-- SQLite
+CREATE TABLE newTasks (
+id INTEGER PRIMARY KEY,
+text TEXT,
+isDone BOOLEAN);
