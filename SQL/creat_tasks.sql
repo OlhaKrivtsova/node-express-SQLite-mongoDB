@@ -1,5 +1,5 @@
 -- SQLite
-CREATE TABLE newTasks (
+CREATE TABLE tasks (
 id INTEGER PRIMARY KEY,
-text TEXT,
+text TEXT UNIQUE,
 isDone BOOLEAN);

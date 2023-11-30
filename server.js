@@ -1,90 +1,97 @@
 const express = require('express');
 const bodyParser = require('body-parser');
+const sqlite3 = require('sqlite3').verbose();
 
 const app = express();
 const port = 3000;
+dbName = 'tasks.db';
+const db = new sqlite3.Database(dbName);
 
-let tasks = [
-  {id: 1, text: 'Go shopping'},
-  {id: 2, text: 'Do chores'},
-  {id: 3, text: 'Do dishes'},
-  {id: 4, text: 'Go for a walk'},
-  {id: 5, text: 'Exercise', isDone: false},
-];
+// let tasks = [
+//   {id: 1, text: 'Go shopping'},
+//   {id: 2, text: 'Do chores'},
+//   {id: 3, text: 'Do dishes'},
+//   {id: 4, text: 'Go for a walk'},
+//   {id: 5, text: 'Exercise', isDone: false},
+// ];
 
 app.use(bodyParser.json());
-
-const errMessageId = (method, res, id) => {
-  if (['get', 'delete', 'patch'].includes(method))
-    return res.status(404).json({message: `Task with id ${id} is not found`});
-  if (method === 'post')
-    return res.status(404).json({
-      message: `Task with id ${id} has already existed. If you want to replace it, sent the PUT request`,
-    });
-  if (method === 'put')
-    return res.status(404).json({
-      message: `Task with id ${id} is not found. If you want to create a new task, sent the POST request`,
-    });
-};
-
-const errMessageText = (res, text, id) => {
-  return res.status(404).json({
-    message: `Task '${text}' has already existed with id ${id}.`,
-  });
-};
 
 app.get('/', (req, res) => {
   res.send('Hello, Express!!');
 });
 
 app.get('/tasks', (req, res) => {
-  res.status(200).json(tasks);
+  db.all('select * from tasks', (err, rows) => res.status(200).json(rows));
 });
 
 app.get('/tasks/:id', (req, res) => {
   const id = Number(req.params.id);
-  const foundTask = tasks.find(item => item.id === id);
-  if (!foundTask) return errMessageId('get', res, id);
-  return res.status(200).json(foundTask);
+  db.get('select * from tasks where id=?', id, (err, rows) => {
+    console.log(rows);
+    if (err) return res.status(500).json({error: err.message});
+    if (!rows)
+      return res.status(404).json({
+        message: `Task with id ${id} is not found.`,
+      });
+    return res.status(200).json(rows);
+  });
 });
 
 app.post('/tasks', (req, res) => {
-  const {id, text} = req.body;
-  let foundTask = tasks.find(item => item.text === text || item.id === id);
-  if (foundTask?.text === text) return errMessageText(res, text, foundTask.id);
-  foundTask = tasks.find(item => item.id === id);
-  if (foundTask?.id === id) return errMessageId('post', res, id);
-  tasks.push({id, text});
-  return res.status(201).json(tasks);
+  const {id, text, isDone} = req.body;
+  db.run(
+    'insert into tasks (id, text, isDone) values (?, ?, ?)',
+    [id, text, isDone],
+    function (err) {
+      if (err) return res.status(500).json({error: err.message});
+      return res.status(201).json({idLast: this.lastID, id, text, isDone});
+    }
+  );
 });
 
 app.put('/tasks', (req, res) => {
-  const {id, text} = req.body;
-  const foundTask = tasks.find(item => item.text === text);
-  if (foundTask) return errMessageText(res, text, foundTask.id);
-  const foundIndex = tasks.findIndex(item => item.id === id);
-  if (foundIndex < 0) return errMessageId('put', res, id);
-  tasks[foundIndex] = {...req.body};
-  return res.status(201).json(tasks);
+  const {id, text, isDone} = req.body;
+  db.run(
+    'update tasks set text = ?,  isDone = ? where id = ?',
+    [text, isDone, id],
+    function (err) {
+      if (err) return res.status(500).json({error: err.message});
+      if (this.changes === 0)
+        return res.status(400).json({message: `task ${id} is not found`});
+      return res
+        .status(201)
+        .json({id, text, isDone, message: `task ${id} is replaced`});
+      //this.changes the number of rows affected by this query
+    }
+  );
 });
 
 app.patch('/tasks/:id', (req, res) => {
-  const {text} = req.body;
-  const foundTask = tasks.find(item => item.text === text);
-  if (foundTask) return errMessageText(res, text, foundTask.id);
+  const {text, isDone} = req.body;
   const id = Number(req.params.id);
-  const foundIndex = tasks.findIndex(item => item.id === id);
-  if (foundIndex < 0) return errMessageId('patch', res, id);
-  tasks[foundIndex] = {...tasks[foundIndex], ...req.body};
-  return res.status(200).json(tasks);
+  db.run(
+    'update tasks set text = ?,  isDone = ? where id = ?',
+    [text, isDone, id],
+    function (err) {
+      if (err) return res.status(500).json({error: err.message});
+      if (this.changes === 0)
+        return res.status(400).json({message: `task ${id} is not found`});
+      return res
+        .status(201)
+        .json({id, text, isDone, message: `task ${id} is replaced`});
+    }
+  );
 });
 
 app.delete('/tasks/:id', (req, res) => {
   const id = Number(req.params.id);
-  const foundTask = tasks.find(item => item.id === id);
-  if (!foundTask) return errMessageId('delete', res, id);
-  tasks = tasks.filter(item => item.id !== id);
-  return res.status(200).json(tasks);
+  db.run('delete from tasks where id = ?', id, function (err) {
+    if (err) return res.status(500).json({error: err.message});
+    if (this.changes === 0)
+      return res.status(400).json({message: `task ${id} is not found`});
+    return res.status(200).json({id, message: `task ${id} is deleted`});
+  });
 });
 
 app.listen(port, () => {
