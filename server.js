@@ -1,7 +1,11 @@
 const express = require('express');
 const bodyParser = require('body-parser');
+const bcrypt = require('bcrypt');
 require('./config/db');
-const {Task} = require('./models/taskModel');
+const Task = require('./models/taskModel');
+const User = require('./models/userModel');
+const checkAuth = require('./middleware/checkAuth');
+const checkAdmin = require('./middleware/checkAdmin');
 
 const app = express();
 const port = 3000;
@@ -15,9 +19,60 @@ const serverError = (err, res) => {
 const idNotExist = (id, res, err) =>
   res.status(404).json({message: err ?? `The task with '${id}' is not found`});
 
-app.get('/', (req, res) => {
-  res.send('Hello, Express!!');
+/////authorization
+///create user
+app.post('/users', async (req, res) => {
+  try {
+    const {password, ...user} = req.body;
+    const salt = await bcrypt.genSalt(10);
+    const hash = await bcrypt.hash(password, salt);
+    const newUser = await User.create({password: hash, ...user});
+    const {password: pass, ...newIdentity} = await newUser._doc;
+    return res.status(201).json(newIdentity);
+  } catch (err) {
+    return serverError(err, res);
+  }
 });
+
+///authorize user
+app.post('/login', async (req, res) => {
+  try {
+    const {password, email} = req.body;
+    const user = await User.findOne({email});
+    const isPasswordValid =
+      (await user) && (await bcrypt.compare(password, user.password));
+    if (!isPasswordValid)
+      return res.status(400).json({message: 'Invalid login or password'});
+    return res.status(200).json({message: 'Success!', id: user.id});
+  } catch (err) {
+    return serverError(err, res);
+  }
+});
+
+///Basic authentication
+app.get('/books', checkAuth, checkAdmin, async (req, res) => {
+  try {
+    return res.status(200).send('all books');
+  } catch (err) {
+    return serverError(err, res);
+  }
+});
+
+app.get('/users', async (req, res) => {
+  try {
+    const users = await User.find();
+    const persons = await users.map(item => {
+      const {password, ...person} = item._doc;
+      return person;
+    });
+    if (!users?.[0]) return idNotExist(0, res, 'No users found');
+    return res.status(201).json(persons);
+  } catch (err) {
+    return serverError(err, res);
+  }
+});
+
+///////tasks
 
 app.get('/tasks', async (req, res) => {
   try {
