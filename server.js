@@ -9,7 +9,6 @@ const checkAdmin = require('./middleware/checkAdmin');
 
 const app = express();
 const port = 3000;
-
 app.use(bodyParser.json());
 
 const serverError = (err, res) => {
