@@ -1,23 +1,64 @@
 const express = require('express');
 const multer = require('multer');
-// const bodyParser = require('body-parser');
+require('./config/db.js');
+const User = require('./models/userModel.js');
+const bodyParser = require('body-parser');
 
 const app = express();
 const port = 3000;
+
+app.use(bodyParser.json());
+
+//create access for clients to folder '/uploads' for watching images
+app.use('/uploads', express.static('uploads')); //http://localhost:3000/uploads/image_1560.jpg
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, './uploads'),
   filename: (req, file, cb) => cb(null, file.originalname),
 });
 
-// const upload = multer({dest: './uploads'}).single('demo_image');
+// const upload = multer({dest: 'uploads/'}).single('demo_image');
 
 // const upload = multer({storage, limits: {fileSize: 1100000}}).single(
 //   'demo_image'
 // );
 const upload = multer({storage, limits: {fileSize: 1100000}}); //for uploading a few files
 
-// app.use(bodyParser.json());
+app.get('/users', async (req, res) => {
+  try {
+    const user = await User.find();
+    res.status(200).json(user);
+  } catch (error) {
+    console.log(error);
+    res.status(500).send('something went wrong');
+  }
+});
+
+app.post('/users', async (req, res) => {
+  try {
+    const user = await User.create(req.body);
+    res.status(201).json(user);
+  } catch (error) {
+    console.log(error);
+    res.status(500).send('something went wrong');
+  }
+});
+
+app.put('/users/:id', upload.single('demo_image'), async (req, res) => {
+  try {
+    const user = await User.findByIdAndUpdate(
+      req.params.id,
+      {
+        photo: req.file.filename,
+      },
+      {new: true}
+    );
+    res.status(200).json(user);
+  } catch (error) {
+    console.log(error);
+    res.status(500).send('something went wrong');
+  }
+});
 
 //for uploading a few files
 app.post('/image', upload.array('demo_image', 4), (req, res) => {
@@ -28,6 +69,7 @@ app.post('/image', upload.array('demo_image', 4), (req, res) => {
     res.status(400).send('something went wrong');
   }
 });
+
 ///for uploading a single file
 // app.post('/image', (req, res) => {
 //   upload(req, res, err => {
@@ -57,56 +99,6 @@ app.post('/image', upload.array('demo_image', 4), (req, res) => {
 //   "path": "uploads/image 1559.jpg",
 //   "size": 1054053
 // }
-
-// app.get('/tasks', (req, res) => {
-//   res.status(200).json(tasks);
-// });
-
-// app.get('/tasks/:id', (req, res) => {
-//   const id = Number(req.params.id);
-//   const foundTask = tasks.find(item => item.id === id);
-//   if (!foundTask) return errMessageId('get', res, id);
-//   return res.status(200).json(foundTask);
-// });
-
-// app.post('/tasks', (req, res) => {
-//   const {id, text} = req.body;
-//   let foundTask = tasks.find(item => item.text === text || item.id === id);
-//   if (foundTask?.text === text) return errMessageText(res, text, foundTask.id);
-//   foundTask = tasks.find(item => item.id === id);
-//   if (foundTask?.id === id) return errMessageId('post', res, id);
-//   tasks.push({id, text});
-//   return res.status(201).json(tasks);
-// });
-
-// app.put('/tasks', (req, res) => {
-//   const {id, text} = req.body;
-//   const foundTask = tasks.find(item => item.text === text);
-//   if (foundTask) return errMessageText(res, text, foundTask.id);
-//   const foundIndex = tasks.findIndex(item => item.id === id);
-//   if (foundIndex < 0) return errMessageId('put', res, id);
-//   tasks[foundIndex] = {...req.body};
-//   return res.status(201).json(tasks);
-// });
-
-// app.patch('/tasks/:id', (req, res) => {
-//   const {text} = req.body;
-//   const foundTask = tasks.find(item => item.text === text);
-//   if (foundTask) return errMessageText(res, text, foundTask.id);
-//   const id = Number(req.params.id);
-//   const foundIndex = tasks.findIndex(item => item.id === id);
-//   if (foundIndex < 0) return errMessageId('patch', res, id);
-//   tasks[foundIndex] = {...tasks[foundIndex], ...req.body};
-//   return res.status(200).json(tasks);
-// });
-
-// app.delete('/tasks/:id', (req, res) => {
-//   const id = Number(req.params.id);
-//   const foundTask = tasks.find(item => item.id === id);
-//   if (!foundTask) return errMessageId('delete', res, id);
-//   tasks = tasks.filter(item => item.id !== id);
-//   return res.status(200).json(tasks);
-// });
 
 app.listen(port, () => {
   console.log(`server is listened on http://localhost:${port}`);
